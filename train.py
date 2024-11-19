@@ -110,13 +110,14 @@ if __name__ == "__main__":
             )
         ]
     )
-    policy_kwargs = dict(net_arch=dict(pi=[32, 32], vf=[32, 32]))
+    policy_kwargs = dict(net_arch=dict(pi=[100, 32], vf=[100, 32]))
     model = PPO(
         "MlpPolicy",
         env,
         verbose=1,
         device="cpu",
         policy_kwargs=policy_kwargs,
+        learning_rate=lambda x: 1e-4 * (1 - x),
     )
     total_steps = 1_000_000
     model.learn(total_timesteps=total_steps)
@@ -155,7 +156,9 @@ if __name__ == "__main__":
         {
             "final_model_accuracy": accuracy,
             "cart_accuracy": cart_accuracy,
-            "best_tree_step": np.round(env.get_attr("best_tree_step")[0] / total_steps,2),
+            "best_tree_step": np.round(
+                env.get_attr("best_tree_step")[0] / total_steps, 2
+            ),
         }
     )
 
