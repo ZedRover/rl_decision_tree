@@ -16,14 +16,19 @@ class DecisionTreeEnv(gym.Env):
         self.n_classes = n_classes
         self.action_logger = action_logger
 
+        # self.action_space = spaces.Box(
+        #     low=np.array([0, 0]), high=np.array([self.d - 1, 1]), dtype=np.float32
+        # )
         self.action_space = spaces.Box(
-            low=np.array([0, 0]), high=np.array([self.d - 1, 1]), dtype=np.float32
+            low=0, high=self.d - 1e-3, shape=(1,), dtype=np.float32
         )
+        print(f"action space: {self.action_space}")
 
         max_nodes = 2 ** (self.max_depth) - 1
         self.observation_space = spaces.Box(
             low=-1, high=self.d - 1, shape=(max_nodes * 2,), dtype=np.float32
         )
+        print(f"observation space: {self.observation_space}")
 
         self.tree = DecisionTree(max_depth, n_classes)
         self.current_node = 0
@@ -40,8 +45,9 @@ class DecisionTreeEnv(gym.Env):
 
     def step(self, action):
         done = False
-        feature = int(action[0])
-        threshold = action[1]
+        action = action[0]
+        feature = int(action)
+        threshold = action - feature
         if self.current_node < 2**self.max_depth - 1:
             self.tree.add_node(self.current_node, feature=feature, threshold=threshold)
             reward = self._calculate_reward(self.current_node)
@@ -53,31 +59,34 @@ class DecisionTreeEnv(gym.Env):
             self._assign_leaf_classes()
             total_accuracy = np.mean(self.tree.predict(self.X) == self.y)
             self.action_logger.accuracy[self.step_count] = total_accuracy
+            random_accuracy = np.mean(np.bincount(self.y).max() == self.y)
 
             # Log accuracy to WandB
             wandb.log({"accuracy": total_accuracy, "step": self.step_count})
 
-            reward = total_accuracy * 10
+            reward = (total_accuracy - random_accuracy) * 10
             if total_accuracy > self.cur_acc:
                 self.cur_acc = total_accuracy
                 self.best_tree = deepcopy(self.tree)
                 self.best_tree_step = self.step_count
 
         self.action_logger.reward[self.step_count] = reward
-        self.current_node += 1
-        self.step_count += 1
 
         self.action_logger.log(
             self.current_node, feature, threshold, self.step_count, reward
         )
+        if not done:
+            wandb.log(
+                {
+                    "step": self.step_count,
+                    f"node_{self.current_node} | threshold": feature + threshold,
+                    "reward": reward,
+                }
+            )
+            
+        self.current_node += 1
+        self.step_count += 1
 
-        wandb.log(
-            {
-                "step": self.step_count,
-                f"node_{self.current_node} | threshold": feature + threshold,
-                "reward": reward,
-            }
-        )
         return self.tree.get_state_representation(), reward, done, False, {}
 
     def _assign_leaf_classes(self):
@@ -159,4 +168,4 @@ class DecisionTreeEnv(gym.Env):
             split_accuracy = default_accuracy
 
         reward = split_accuracy - default_accuracy
-        return reward * 10
+        return reward

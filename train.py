@@ -13,8 +13,8 @@ from src.env import DecisionTreeEnv
 import argparse
 
 args = argparse.ArgumentParser()
-args.add_argument("--max_depth", type=int, default=2)
-args.add_argument("--data_name", type=str, default="glass")
+args.add_argument("--max_depth", "-d", type=int, default=2)
+args.add_argument("--data_name", "-s", type=str, default="glass")
 args = args.parse_args()
 
 MAX_DEPTH = args.max_depth
@@ -24,11 +24,12 @@ TOY_DATA = np.loadtxt(f"data/{DATA_NAME}", delimiter=",")
 GLOBAL_X, GLOBAL_Y = read_data(DATA_NAME)
 N_CLASSES = len(np.unique(GLOBAL_Y))
 M, D = GLOBAL_X.shape
+print(f"Data Name: {DATA_NAME}; Data Shape: {GLOBAL_X.shape}")
 
 GLOBAL_X = MinMaxScaler().fit_transform(GLOBAL_X)
 
 wandb.init(
-    project="rl_decision_tree_training",
+    project="rl_decision_tree_training-test",
     config={
         "data_name": DATA_NAME,
         "max_depth": MAX_DEPTH,
@@ -56,7 +57,6 @@ class ActionLogger:
             wandb.log(
                 {
                     "step": step,
-                    "node_id": node_id,
                     "feature": feature,
                     "threshold": threshold,
                     "reward": reward,
@@ -110,7 +110,7 @@ if __name__ == "__main__":
             )
         ]
     )
-    policy_kwargs = dict(net_arch=dict(pi=[100, 32], vf=[100, 32]))
+    policy_kwargs = dict(net_arch=dict(pi=[32, 16], vf=[32, 16]))
     model = PPO(
         "MlpPolicy",
         env,
@@ -118,13 +118,17 @@ if __name__ == "__main__":
         device="cpu",
         policy_kwargs=policy_kwargs,
         learning_rate=lambda x: 1e-4 * (1 - x),
+        gamma=0.99,
+        # increase the exploration rate
+        # ent_coef=0.01,
     )
+    model.policy.log_std.data.fill_(1)  # 初始标准差设为较高值
     total_steps = 1_000_000
     model.learn(total_timesteps=total_steps)
 
-    action_logger.plot_node_feature_thresholds()
-    action_logger.plot_rewards()
-    action_logger.plot_accuracy()
+    # action_logger.plot_node_feature_thresholds()
+    # action_logger.plot_rewards()
+    # action_logger.plot_accuracy()
 
     # Extract the tree structure from the model
     final_tree = env.get_attr("best_tree")[0]
