@@ -5,7 +5,6 @@ from copy import deepcopy
 from .tree import DecisionTree
 import wandb
 
-
 class DecisionTreeEnv(gym.Env):
     def __init__(self, X, y, max_depth, n_classes, action_logger):
         super().__init__()
@@ -64,7 +63,7 @@ class DecisionTreeEnv(gym.Env):
             # Log accuracy to WandB
             wandb.log({"accuracy": total_accuracy, "step": self.step_count})
 
-            reward = (total_accuracy - random_accuracy) * 10
+            reward = (total_accuracy - random_accuracy) * 20
             if total_accuracy > self.cur_acc:
                 self.cur_acc = total_accuracy
                 self.best_tree = deepcopy(self.tree)
@@ -83,7 +82,7 @@ class DecisionTreeEnv(gym.Env):
                     "reward": reward,
                 }
             )
-            
+
         self.current_node += 1
         self.step_count += 1
 
@@ -145,6 +144,8 @@ class DecisionTreeEnv(gym.Env):
             right_indices = samples_at_node[
                 self.X[samples_at_node][:, feature] > threshold
             ]
+            if len(left_indices) == 0 or len(right_indices) == 0:
+                return -1
 
             left_accuracy = (
                 np.mean(
