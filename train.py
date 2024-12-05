@@ -14,7 +14,7 @@ import argparse
 
 args = argparse.ArgumentParser()
 args.add_argument("--max_depth", "-d", type=int, default=2)
-args.add_argument("--data_name", "-s", type=str, default="glass")
+args.add_argument("--data_name", "-s", type=str, default="seeds")
 args = args.parse_args()
 
 MAX_DEPTH = args.max_depth

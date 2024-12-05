@@ -5,11 +5,13 @@ from copy import deepcopy
 from .tree import DecisionTree
 import wandb
 
+
 class DecisionTreeEnv(gym.Env):
     def __init__(self, X, y, max_depth, n_classes, action_logger):
         super().__init__()
         self.X = X
         self.y = y
+        self.labels = np.unique(y)
         self.m, self.d = X.shape
         self.max_depth = max_depth
         self.n_classes = n_classes
@@ -89,32 +91,52 @@ class DecisionTreeEnv(gym.Env):
         return self.tree.get_state_representation(), reward, done, False, {}
 
     def _assign_leaf_classes(self):
+        global_label_counts = {label: 0 for label in self.labels}
+        for y_value in self.y:
+            global_label_counts[y_value] += 1
+        global_most_common_class = max(global_label_counts, key=global_label_counts.get)
+
         for node_id in range(2**self.max_depth - 1, 2 ** (self.max_depth + 1) - 1):
             if node_id not in self.tree.nodes:
                 self.tree.add_node(node_id)
             if self.tree.nodes[node_id]["leaf_class"] is None:
                 samples_at_node = self._get_samples_for_node(node_id)
                 if samples_at_node.size > 0:
-                    leaf_class = np.bincount(self.y[samples_at_node]).argmax()
-                    self.tree.set_leaf_class(node_id, leaf_class)
+                    label_counts = {label: 0 for label in self.labels}
+                    for sample_index in samples_at_node:
+                        label_counts[self.y[sample_index]] += 1
+
+                    if sum(label_counts.values()) == 0:
+                        self.tree.set_leaf_class(node_id, global_most_common_class)
+                    else:
+                        leaf_class = max(label_counts, key=label_counts.get)
+                        self.tree.set_leaf_class(node_id, leaf_class)
                 else:
-                    random_class = np.random.randint(self.n_classes)
-                    self.tree.set_leaf_class(node_id, random_class)
+                    self.tree.set_leaf_class(node_id, global_most_common_class)
 
     def _get_samples_for_node(self, node_id):
+        path_conditions = []
+        current_node = node_id
+
+        while current_node > 0:
+            parent_node = (
+                (current_node - 1) // 2
+                if current_node % 2 == 1
+                else (current_node - 2) // 2
+            )
+            node = self.tree.nodes.get(parent_node, None)
+            if node and "feature" in node and "threshold" in node:
+                # 将条件存为 (特征索引, 阈值, 是否为左子节点)
+                is_left_child = current_node % 2 == 1
+                path_conditions.append(
+                    (node["feature"], node["threshold"], is_left_child)
+                )
+            current_node = parent_node
+
+        # 应用收集的条件过滤样本
         indices = np.arange(self.m)
-        for depth in range(self.max_depth):
-            if node_id < 2**depth:
-                break
-            parent_node = (node_id - 1) // 2 if node_id % 2 == 1 else (node_id - 2) // 2
-            node = self.tree.nodes.get(parent_node, {})
-            feature = node.get("feature")
-            threshold = node.get("threshold")
-
-            if feature is None or threshold is None:
-                break
-
-            if node_id % 2 == 1:
+        for feature, threshold, is_left_child in reversed(path_conditions):
+            if is_left_child:
                 indices = indices[self.X[indices][:, feature] <= threshold]
             else:
                 indices = indices[self.X[indices][:, feature] > threshold]
