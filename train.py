@@ -31,7 +31,7 @@ GLOBAL_X = scaler.fit_transform(GLOBAL_X)
 
 
 wandb.init(
-    project="rl_decision_tree_training-test",
+    project="rl_tree_raw_release2",
     config={
         "data_name": DATA_NAME,
         "max_depth": MAX_DEPTH,
@@ -122,7 +122,7 @@ if __name__ == "__main__":
         learning_rate=lambda x: 1e-3 * (1 - x),
         gamma=0.99,
         # increase the exploration rate
-        ent_coef=0.01,
+        ent_coef=0.02,
     )
     model.policy.log_std.data.fill_(1)  # 初始标准差设为较高值
     total_steps = 1_000_000
