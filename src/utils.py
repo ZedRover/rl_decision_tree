@@ -62,3 +62,47 @@ def cart_split(X, y):
                 best_threshold = threshold
 
     return best_feature, best_threshold
+
+
+def calculate_feature_gaps(X):
+    """
+    Calculate gaps for each feature in the dataset X.
+
+    Parameters:
+    X (numpy.ndarray): The dataset with shape (n_samples, n_features).
+
+    Returns:
+    list: A list of dictionaries, where each dictionary contains:
+        - 'feature_index': The index of the feature.
+        - 'gaps': The calculated gap values for that feature.
+    """
+    feature_gaps = []
+
+    for feature_idx in range(X.shape[1]):
+        # Extract and sort the feature values
+        feature_values = np.sort(X[:, feature_idx])
+        feature_values = np.unique(feature_values)
+
+        # Calculate gaps as the average of consecutive values
+        gaps = (feature_values[1:] + feature_values[:-1]) / 2
+
+        # Store the results
+        feature_gaps.append({"feature_index": feature_idx, "gaps": gaps})
+
+    return feature_gaps
+
+
+# Example usage
+if __name__ == "__main__":
+    # Sample dataset
+    X_sample = np.array(
+        [
+            [1.0, 2.0, 3.0],
+            [2.0, 3.0, 5.0],
+            [4.0, 1.0, 2.0],
+        ]
+    )
+
+    gaps = calculate_feature_gaps(X_sample)
+    for gap in gaps:
+        print(f"Feature {gap['feature_index']} gaps: {gap['gaps']}")

@@ -16,6 +16,7 @@ args = argparse.ArgumentParser()
 args.add_argument("--max_depth", "-d", type=int, default=2)
 args.add_argument("--data_name", "-s", type=str, default="seeds")
 args = args.parse_args()
+
 MAX_DEPTH = args.max_depth
 DATA_NAME = args.data_name
 
@@ -115,20 +116,24 @@ if __name__ == "__main__":
             )
         ]
     )
-    policy_kwargs = dict(net_arch=dict(pi=[32, 32], vf=[32, 32]))
-    model = PPO(
-        "MlpPolicy",
-        env,
-        verbose=1,
-        device="cpu",
-        policy_kwargs=policy_kwargs,
-        learning_rate=lambda x: 1e-3 * (1 - x),
-        gamma=0.99,
-        # increase the exploration rate
-        ent_coef=0.02,
-    )
+    # policy_kwargs = dict(net_arch=dict(pi=[32, 32], vf=[32, 32]))
+    # model = PPO(
+    #     "MlpPolicy",
+    #     env,
+    #     verbose=1,
+    #     device="cpu",
+    #     policy_kwargs=policy_kwargs,
+    #     learning_rate=lambda x: 1e-3 * (1 - x),
+    #     gamma=0.99,
+    #     # increase the exploration rate
+    #     ent_coef=0.02,
+    # )
     # model.policy.log_std.data.fill_(1)  # 初始标准差设为较高值
     # total_steps = 1_000_000
+    
+    # use DQN MODEL
+    model = 
+
     total_steps = 1_000_00
     model.learn(total_timesteps=total_steps)
 

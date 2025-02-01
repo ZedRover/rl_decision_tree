@@ -4,6 +4,7 @@ from gymnasium import spaces
 from copy import deepcopy
 from .tree import DecisionTree
 import wandb
+from .utils import calculate_feature_gaps
 
 
 class DecisionTreeEnv(gym.Env):
@@ -17,20 +18,27 @@ class DecisionTreeEnv(gym.Env):
         self.n_classes = n_classes
         self.action_logger = action_logger
 
-        # self.action_space = spaces.Box(
-        #     low=np.array([0, 0]), high=np.array([self.d - 1, 1]), dtype=np.float32
-        # )
-        self.action_space = spaces.Box(
-            low=0, high=self.d - 1e-3, shape=(1,), dtype=np.float32
-        )
-        print(f"action space: {self.action_space}")
+        # Calculate feature gaps
+        self.feature_gaps = calculate_feature_gaps(self.X)
 
+        # Flatten all gap values into a single action space
+        self.all_gaps = []
+        self.gap_indices = []  # Keep track of which feature and gap
+        for feature in self.feature_gaps:
+            for gap in feature['gaps']:
+                self.all_gaps.append(gap)
+                self.gap_indices.append((feature['feature_index'], gap))
+
+        # Define the action space as the number of valid gaps
+        self.action_space = spaces.Discrete(len(self.all_gaps))
+
+        # Define observation space
         max_nodes = 2 ** (self.max_depth) - 1
         self.observation_space = spaces.Box(
             low=-1, high=self.d - 1, shape=(max_nodes * 2,), dtype=np.float32
         )
-        print(f"observation space: {self.observation_space}")
 
+        # Initialize tree
         self.tree = DecisionTree(max_depth, n_classes)
         self.current_node = 0
         self.step_count = 0
@@ -46,11 +54,12 @@ class DecisionTreeEnv(gym.Env):
 
     def step(self, action):
         done = False
-        action = action[0]
-        feature = int(action)
-        threshold = action - feature
+
+        # Map action to feature and gap value
+        feature_index, gap_value = self.gap_indices[action]
+
         if self.current_node < 2**self.max_depth - 1:
-            self.tree.add_node(self.current_node, feature=feature, threshold=threshold)
+            self.tree.add_node(self.current_node, feature=feature_index, threshold=gap_value)
             reward = self._calculate_reward(self.current_node)
 
         else:
@@ -65,7 +74,7 @@ class DecisionTreeEnv(gym.Env):
             # Log accuracy to WandB
             wandb.log({"accuracy": total_accuracy, "step": self.step_count})
 
-            reward = (total_accuracy - random_accuracy) * 20
+            reward = (total_accuracy - random_accuracy) * 0
             if total_accuracy > self.cur_acc:
                 self.cur_acc = total_accuracy
                 self.best_tree = deepcopy(self.tree)
@@ -74,13 +83,13 @@ class DecisionTreeEnv(gym.Env):
         self.action_logger.reward[self.step_count] = reward
 
         self.action_logger.log(
-            self.current_node, feature, threshold, self.step_count, reward
+            self.current_node, feature_index, gap_value, self.step_count, reward
         )
         if not done:
             wandb.log(
                 {
                     "step": self.step_count,
-                    f"node_{self.current_node} | threshold": feature + threshold,
+                    f"node_{self.current_node} | threshold": feature_index + gap_value,
                     "reward": reward,
                 }
             )
@@ -126,14 +135,12 @@ class DecisionTreeEnv(gym.Env):
             )
             node = self.tree.nodes.get(parent_node, None)
             if node and "feature" in node and "threshold" in node:
-                # 将条件存为 (特征索引, 阈值, 是否为左子节点)
                 is_left_child = current_node % 2 == 1
                 path_conditions.append(
                     (node["feature"], node["threshold"], is_left_child)
                 )
             current_node = parent_node
 
-        # 应用收集的条件过滤样本
         indices = np.arange(self.m)
         for feature, threshold, is_left_child in reversed(path_conditions):
             if is_left_child:
